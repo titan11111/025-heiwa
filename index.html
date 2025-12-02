@@ -26,10 +26,10 @@ body {
   font-family: 'DotGothic16', monospace;
   background-color: #000;
   color: var(--text-color);
-  width: 100%; height: 100dvh;
+  width: 100%; height: 100dvh; /* dvhでモバイルのアドレスバー考慮 */
   overflow: hidden;
   display: flex; justify-content: center; align-items: center;
-  touch-action: manipulation;
+  touch-action: none; /* 全体的なスクロール防止 */
 }
 
 .scanlines {
@@ -92,6 +92,8 @@ body {
 .ui-area {
   height: 45%; background-color: #000; padding: 2%;
   position: relative; z-index: 10; display: flex; flex-direction: column;
+  /* iOS Safe Area 対応 */
+  padding-bottom: max(2%, env(safe-area-inset-bottom));
 }
 .status-bar {
   position: absolute; top: 15px; right: 15px;
@@ -119,14 +121,28 @@ progress::-webkit-progress-value { background-color: #00ff00; border-radius: 10p
 .cursor-icon { position: absolute; bottom: 10px; right: 10px; animation: blink 1s infinite; }
 .hidden { display: none !important; }
 
-/* --- コマンドウィンドウ（4択アイコン付き） --- */
+/* --- コマンドウィンドウ（4択アイコン付き）修正版 --- */
 .command-window {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 40, 0.95); border: 4px solid #ffd700; padding: 10px;
-  display: flex; flex-direction: column; z-index: 50; align-items: center; justify-content: center;
+  background: rgba(0, 0, 40, 0.95); border: 4px solid #ffd700; 
+  padding: 10px;
+  /* iOS Safe Area 対応 */
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  
+  display: flex; flex-direction: column; z-index: 50; 
+  align-items: center; justify-content: flex-start; /* 上詰めにして下部溢れを防ぐ */
 }
+
+/* タイトル部分 */
+.command-title {
+    color: #fff; margin-bottom: 8px; font-size: 1.2rem; flex-shrink: 0;
+}
+
 .command-grid {
-  display: grid; width: 100%; height: 100%; gap: 10px;
+  display: grid; width: 100%; 
+  /* 高さ100%ではなく、flex: 1 で残り領域を埋める設定に変更 */
+  flex: 1; min-height: 0; 
+  gap: 8px;
   grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
 }
 .spell-button {
@@ -135,12 +151,22 @@ progress::-webkit-progress-value { background-color: #00ff00; border-radius: 10p
   color: #fff; font-family: 'DotGothic16', monospace;
   cursor: pointer; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  padding: 5px; transition: transform 0.1s; box-shadow: 0 4px 0 #000;
+  padding: 4px; transition: transform 0.1s; box-shadow: 0 4px 0 #000;
+  min-height: 0; /* Flexアイテムの縮小を許可 */
+  overflow: hidden; /* 念のためのはみ出し防止 */
 }
 .spell-button:active { transform: translateY(4px); box-shadow: 0 0 0 #000; background: #666; }
-.spell-icon { font-size: 2.5rem; margin-bottom: 5px; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
-.spell-name { font-size: 1.2rem; font-weight: bold; color: #ffff00; }
-.spell-desc { font-size: 0.7rem; color: #ddd; text-align: center; }
+.spell-icon { font-size: 2.5rem; margin-bottom: 2px; text-shadow: 0 0 10px rgba(255,255,255,0.5); flex-shrink: 0; }
+.spell-name { font-size: 1.2rem; font-weight: bold; color: #ffff00; flex-shrink: 0; }
+.spell-desc { font-size: 0.7rem; color: #ddd; text-align: center; line-height: 1.1; overflow: hidden; }
+
+/* モバイル向け微調整（画面が狭い場合） */
+@media (max-height: 600px), (max-width: 400px) {
+    .command-title { font-size: 1rem; margin-bottom: 5px; }
+    .spell-icon { font-size: 2rem; }
+    .spell-name { font-size: 1rem; }
+    .spell-desc { font-size: 0.6rem; }
+}
 
 /* --- フォトカード（クリア演出） --- */
 .photo-card-overlay {
@@ -233,7 +259,7 @@ progress::-webkit-progress-value { background-color: #00ff00; border-radius: 10p
             </div>
 
             <div class="command-window hidden" id="commandWindow">
-                <div style="color:#fff; margin-bottom:5px; font-size:1.2rem;">魔法を選んで修理せよ！</div>
+                <div class="command-title">魔法を選んで修理せよ！</div>
                 <div class="command-grid" id="commandGrid"></div>
             </div>
         </div>
@@ -253,7 +279,7 @@ progress::-webkit-progress-value { background-color: #00ff00; border-radius: 10p
     <script>
 /**
  * 🎮 異世界ニャン還 〜魔王を倒した勇者の家電修理記〜
- * 音楽実装＆メリハリ改善版
+ * iOS/Mobile Responsive Fix
  */
 
 // ==========================================
@@ -300,15 +326,14 @@ let areaData = [
     { id: 20, name: '猫の王宮', npcImg: 'images/neko1.png', itemImg: 'images/image.png', intro: "「最後に…私たちと仲良くしてくれるかニャ？」", problem: "猫たちが不安そうにこちらを見ている。", hint: "種族を超えて仲良くなる魔法。", correctSpell: "nakanao", successMsg: "勇者と猫たちの間に温かい絆が生まれた！", failMsg: "猫たちは警戒して逃げてしまった…" }
 ];
 
-// アップロードされたファイル名に合わせ、BGMを「Pixel Wanderer’s Lullaby.mp3」に変更
 const audioAssets = {
     talk: ['audio/nyan.mp3', 'audio/nyan2.mp3', 'audio/nyan3.mp3'],
-    success: 'audio/nyan6.mp3', // 成功時（喜び）
-    fail: 'audio/nyan8.mp3',    // 失敗時（怒り/悲しみ）
+    success: 'audio/nyan6.mp3', 
+    fail: 'audio/nyan8.mp3',   
     surprise: 'audio/nyan4.mp3',
     sad: 'audio/nyan7.mp3',
     ending: 'audio/nyan9.mp3',
-    bgm: 'audio/Pixel Wanderer’s Lullaby.mp3' // BGMを設定
+    bgm: 'audio/Pixel Wanderer’s Lullaby.mp3' 
 };
 
 // ==========================================
@@ -338,7 +363,6 @@ const els = {
     catRoomLayer: document.getElementById('catRoomLayer'),
     startBtn: document.getElementById('startBtn'),
     effectContainer: document.getElementById('effectContainer'),
-    // フォトカード関連
     photoOverlay: document.getElementById('photoCardOverlay'),
     photoImg: document.getElementById('photoCardImg'),
     photoText: document.getElementById('photoCardText'),
@@ -356,11 +380,9 @@ function shuffleArray(array) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // ボタン設定
     els.startBtn.addEventListener('click', onStartGame);
     els.photoNextBtn.addEventListener('click', onPhotoClose);
 
-    // 画面タップイベント
     const clickZone = document.querySelector('.ui-area');
     const handler = (e) => {
         if(e && e.cancelable) e.preventDefault();
@@ -369,14 +391,12 @@ document.addEventListener('DOMContentLoaded', () => {
     clickZone.addEventListener('click', handler);
     clickZone.addEventListener('touchend', handler);
 
-    // ランダム化
     const normalEvents = areaData.filter(a => a.id !== 20);
     const lastEvent = areaData.find(a => a.id === 20);
     shuffleArray(normalEvents);
     areaData = [...normalEvents, lastEvent];
     areaData.forEach(a => a.cleared = false);
     
-    // 最初はタイトル画面（猫部屋）を表示
     updateCatRoom();
 });
 
@@ -388,7 +408,7 @@ function handleUserClick() {
         case 'opening': nextOpeningScene(); break;
         case 'map': startNextEvent(); break;
         case 'event_talk': showCommandWindow(); break;
-        case 'repair_success_wait': showPhotoCard(); break; // ★ここが追加：テキストを読んだ後にフォトカードへ
+        case 'repair_success_wait': showPhotoCard(); break;
         case 'ending': nextEndingScene(); break;
     }
 }
@@ -406,7 +426,6 @@ function unlockAudio() {
     isAudioUnlocked = true;
 }
 
-// 🐱 猫部屋（タイトル画面）の更新
 function updateCatRoom() {
     els.catRoomLayer.innerHTML = '';
     const clearedAreas = areaData.filter(a => a.cleared);
@@ -497,7 +516,6 @@ function startNextEvent() {
     showMessage(currentArea.name, currentArea.intro, 'talk');
 }
 
-// 🔮 アイコン付き4択コマンド生成
 function showCommandWindow() {
     currentState = 'command_wait';
     els.cmdWindow.classList.remove('hidden');
@@ -530,20 +548,17 @@ function showCommandWindow() {
 function castSpell(spellId) {
     els.cmdWindow.classList.add('hidden');
     
-    // エフェクト
     const magicDiv = document.createElement('div');
     magicDiv.className = 'magic-circle';
     els.effectContainer.appendChild(magicDiv);
-    // 魔法をかける音（会話音で代用）
     playAudio('talk'); 
 
     setTimeout(() => {
         magicDiv.remove();
         if (spellId === currentArea.correctSpell) {
-            // ★成功ルート改善：いきなりフォトカードではなく、テキストで結果を説明する
-            playAudio('success'); // 成功音
-            els.item.classList.remove('shake-anim'); // 揺れを止める
-            showRepairResult(); // まずテキストを見せる
+            playAudio('success'); 
+            els.item.classList.remove('shake-anim'); 
+            showRepairResult(); 
         } else {
             playAudio('fail');
             showMessage("失敗...", currentArea.failMsg);
@@ -552,18 +567,15 @@ function castSpell(spellId) {
     }, 800);
 }
 
-// ★追加：修理結果テキストを表示（メリハリStep 1）
 function showRepairResult() {
     currentState = 'repair_success_wait';
     els.msgText.classList.remove('text-hidden');
     showMessage("修理完了！", currentArea.successMsg);
 }
 
-// 📸 フォトカード表示（メリハリStep 2）
 function showPhotoCard() {
     currentState = 'photo_wait';
-    // スタンプ音的に成功音をもう一度短く鳴らすなどの演出もあり
-    els.photoImg.src = currentArea.itemImg; // 修理したアイテムを表示
+    els.photoImg.src = currentArea.itemImg; 
     els.photoText.textContent = `File.${currentArea.id} 修理完了！`;
     els.photoOverlay.classList.remove('hidden');
 }
@@ -571,14 +583,12 @@ function showPhotoCard() {
 function onPhotoClose() {
     els.photoOverlay.classList.add('hidden');
     
-    // データ更新
     currentArea.cleared = true;
     clearedCount++;
     updateProgress();
     
-    // 次へ
     currentState = 'map';
-    els.npc.src = 'images/neko6.png'; // 喜ぶ猫に変更して待機
+    els.npc.src = 'images/neko6.png'; 
 }
 
 // ==========================================
